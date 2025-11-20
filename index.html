@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outlet Order Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #3498db;
+            --secondary: #2ecc71;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --dark: #2c3e50;
+            --light: #ecf0f1;
+            --gray: #95a5a6;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--dark));
+            color: white;
+            padding: 20px 0;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo i {
+            font-size: 2.5rem;
+        }
+        
+        .logo h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .outlet-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            border-radius: 50px;
+        }
+        
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .login-container h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--dark);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.9rem;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        
+        .btn-success {
+            background: var(--secondary);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #27ae60;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            min-width: 120px;
+        }
+        
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .tab:hover:not(.active) {
+            background: #f1f1f1;
+        }
+        
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .suggestions-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        
+        .suggestion-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .suggestion-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .form-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        
+        .cart-items {
+            margin-bottom: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+        
+        .cart-item-details {
+            flex: 1;
+        }
+        
+        .cart-item-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .cart-item-quantity {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .quantity-input {
+            width: 80px;
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .remove-item {
+            color: var(--danger);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        
+        .cart-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .summary-total {
+            font-weight: 700;
+            font-size: 1.2rem;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--gray);
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #ddd;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 5px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateX(150%);
+            transition: transform 0.5s ease;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification-success {
+            background: var(--secondary);
+        }
+        
+        .notification-error {
+            background: var(--danger);
+        }
+        
+        .unit-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #e1f0fa;
+            color: var(--primary);
+        }
+        
+        .orders-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        
+        .order-card {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            background: white;
+        }
+        
+        .order-card:last-child {
+            border-bottom: none;
+        }
+        
+        .order-card:hover {
+            background: #f9f9f9;
+        }
+        
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .order-id {
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .order-date {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .order-outlet {
+            font-weight: 500;
+        }
+        
+        .order-items {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+        
+        .order-status {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-completed {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .role-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #e8f5e8;
+            color: var(--secondary);
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .form-row {
+                flex-direction: column;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .tab {
+                min-width: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <h2><i class="fas fa-lock"></i> Outlet Order System Login</h2>
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="Enter your username">
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter your password">
+        </div>
+        <button class="btn btn-primary" id="loginBtn" style="width: 100%; justify-content: center;">
+            <i class="fas fa-sign-in-alt"></i> Login
+        </button>
+        <div style="margin-top: 20px; font-size: 0.9rem; color: var(--gray); text-align: center;">
+            <p>Default admin credentials: admin / admin123</p>
+            <p>User credentials: user1 / user123 (Outlet A)</p>
+        </div>
+    </div>
+
+    <!-- Main Application (Initially Hidden) -->
+    <div id="appScreen" style="display: none;">
+        <div class="container">
+            <header>
+                <div class="header-content">
+                    <div class="logo">
+                        <i class="fas fa-warehouse"></i>
+                        <h1>Outlet Order Management</h1>
+                    </div>
+                    <div class="user-info">
+                        <div class="outlet-info">
+                            <i class="fas fa-store"></i>
+                            <span id="currentOutlet">Outlet A</span>
+                        </div>
+                        <div class="user-details">
+                            <span id="userName">User: John Doe</span>
+                            <span id="userRole" class="role-badge" style="margin-left: 10px;">Admin</span>
+                            <button class="btn btn-danger" id="logoutBtn" style="width: auto; padding: 8px 15px; margin-left: 15px;">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="tabs" id="mainTabs">
+                <div class="tab active" data-tab="orders">Orders</div>
+                <div class="tab" data-tab="cart">Cart <span id="cartCount">(0)</span></div>
+                <!-- Admin-only tabs (hidden for regular users) -->
+                <div id="adminTab1" class="tab" data-tab="items" style="display: none;">Items</div>
+                <div id="adminTab2" class="tab" data-tab="outlets" style="display: none;">Outlets</div>
+                <div id="adminTab3" class="tab" data-tab="admin" style="display: none;">Users</div>
+            </div>
+            
+            <!-- Orders Tab (Visible to all users) -->
+            <div class="tab-content active" id="orders-tab">
+                <h2>Order Management</h2>
+                <div class="action-buttons" style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" id="addOrderBtn">
+                        <i class="fas fa-plus"></i> Create New Order
+                    </button>
+                </div>
+                
+                <h3>Recent Orders</h3>
+                <div class="orders-container" id="ordersContainer">
+                    <!-- Orders will be dynamically added here -->
+                </div>
+            </div>
+            
+            <!-- Cart Tab (Visible to all users) -->
+            <div class="tab-content" id="cart-tab">
+                <h2>Quick Order Cart</h2>
+                
+                <div class="search-container">
+                    <input type="text" id="itemSearch" class="search-input" placeholder="Start typing to search items...">
+                    <div class="suggestions-list" id="itemSuggestions"></div>
+                </div>
+                
+                <div class="cart-items" id="cartItems">
+                    <!-- Cart items will be dynamically added here -->
+                </div>
+                
+                <div class="cart-summary">
+                    <div class="summary-row">
+                        <span>Total Items:</span>
+                        <span id="totalItems">0</span>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn btn-danger" id="clearCart">
+                            <i class="fas fa-trash"></i> Clear Cart
+                        </button>
+                        <button class="btn btn-success" id="confirmOrder">
+                            <i class="fas fa-check"></i> Confirm Order
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Items Tab (Admin only) -->
+            <div class="tab-content" id="items-tab">
+                <h2>Item Management <span class="role-badge">Admin Only</span></h2>
+                <div class="action-buttons" style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" id="addItemBtn">
+                        <i class="fas fa-plus"></i> Add New Item
+                    </button>
+                </div>
+                
+                <div class="form-container" id="itemForm" style="display: none;">
+                    <h3 id="itemFormTitle">Add New Item</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="itemName">Item Name</label>
+                            <input type="text" id="itemName" placeholder="Enter item name">
+                        </div>
+                        <div class="form-group">
+                            <label for="itemCategory">Category</label>
+                            <input type="text" id="itemCategory" placeholder="Enter category">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="itemUnit">Unit</label>
+                            <select id="itemUnit">
+                                <option value="KGS">KGS</option>
+                                <option value="PCS">PCS</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="align-self: flex-end;">
+                            <button class="btn btn-success" id="saveItemBtn">
+                                <i class="fas fa-save"></i> Save Item
+                            </button>
+                            <button class="btn btn-danger" id="cancelItemBtn">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Category</th>
+                            <th>Unit</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsList">
+                        <!-- Items will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Outlets Tab (Admin only) -->
+            <div class="tab-content" id="outlets-tab">
+                <h2>Outlet Management <span class="role-badge">Admin Only</span></h2>
+                <div class="action-buttons" style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" id="addOutletBtn">
+                        <i class="fas fa-plus"></i> Add New Outlet
+                    </button>
+                </div>
+                
+                <div class="form-container" id="outletForm" style="display: none;">
+                    <h3 id="outletFormTitle">Add New Outlet</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="outletName">Outlet Name</label>
+                            <input type="text" id="outletName" placeholder="Enter outlet name">
+                        </div>
+                        <div class="form-group">
+                            <label for="outletLocation">Location</label>
+                            <input type="text" id="outletLocation" placeholder="Enter location">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="align-self: flex-end;">
+                            <button class="btn btn-success" id="saveOutletBtn">
+                                <i class="fas fa-save"></i> Save Outlet
+                            </button>
+                            <button class="btn btn-danger" id="cancelOutletBtn">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Outlet Name</th>
+                            <th>Location</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="outletsList">
+                        <!-- Outlets will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Admin Tab (Admin only) -->
+            <div class="tab-content" id="admin-tab">
+                <h2>User Management <span class="role-badge">Admin Only</span></h2>
+                <div class="action-buttons" style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" id="addUserBtn">
+                        <i class="fas fa-plus"></i> Add New User
+                    </button>
+                </div>
+                
+                <div class="form-container" id="userForm" style="display: none;">
+                    <h3 id="userFormTitle">Add New User</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserName">Full Name</label>
+                            <input type="text" id="newUserName" placeholder="Enter full name">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserUsername">Username</label>
+                            <input type="text" id="newUserUsername" placeholder="Enter username">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserPassword">Password</label>
+                            <input type="password" id="newUserPassword" placeholder="Enter password">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserOutlet">Outlet</label>
+                            <select id="newUserOutlet">
+                                <!-- Outlets will be populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="align-self: flex-end;">
+                            <button class="btn btn-success" id="saveUserBtn">
+                                <i class="fas fa-save"></i> Save User
+                            </button>
+                            <button class="btn btn-danger" id="cancelUserBtn">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Outlet</th>
+                            <th>Role</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userList">
+                        <!-- Users will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // Database simulation
+        const database = {
+            users: [
+                { id: 1, name: "Admin User", username: "admin", password: "admin123", outletId: 0, role: "admin" },
+                { id: 2, name: "John Smith", username: "user1", password: "user123", outletId: 1, role: "user" },
+                { id: 3, name: "Sarah Johnson", username: "user2", password: "user123", outletId: 2, role: "user" }
+            ],
+            outlets: [
+                { id: 1, name: "Downtown Store", location: "Downtown" },
+                { id: 2, name: "Uptown Market", location: "Uptown" },
+                { id: 3, name: "Westside Shop", location: "Westside" }
+            ],
+            items: [
+                { id: 1, name: "Sugar", category: "Groceries", unit: "KGS" },
+                { id: 2, name: "Rice", category: "Groceries", unit: "KGS" },
+                { id: 3, name: "Flour", category: "Groceries", unit: "KGS" },
+                { id: 4, name: "Soap", category: "Personal Care", unit: "PCS" },
+                { id: 5, name: "Toothpaste", category: "Personal Care", unit: "PCS" },
+                { id: 6, name: "Shampoo", category: "Personal Care", unit: "PCS" },
+                { id: 7, name: "Notebook", category: "Stationery", unit: "PCS" },
+                { id: 8, name: "Pen", category: "Stationery", unit: "PCS" }
+            ],
+            orders: [
+                {
+                    id: "DOWNTOWNST000001",
+                    outletId: 1,
+                    date: "2023-10-15",
+                    createdAt: new Date("2023-10-15"),
+                    items: [
+                        { id: 1, name: "Sugar", quantity: 5, unit: "KGS" },
+                        { id: 4, name: "Soap", quantity: 10, unit: "PCS" }
+                    ],
+                    status: "completed"
+                },
+                {
+                    id: "UPTOWNMAR000001", 
+                    outletId: 2,
+                    date: "2023-10-16",
+                    createdAt: new Date("2023-10-16"),
+                    items: [
+                        { id: 2, name: "Rice", quantity: 10, unit: "KGS" },
+                        { id: 7, name: "Notebook", quantity: 5, unit: "PCS" }
+                    ],
+                    status: "pending"
+                }
+            ],
+            cart: [],
+            orderCounter: {
+                1: 2,
+                2: 2,
+                3: 1
+            }
+        };
+
+        // Current user and application state
+        let currentUser = null;
+        let cart = [];
+        let editingId = null;
+        let currentOrderId = null;
+
+        // DOM Elements
+        const loginScreen = document.getElementById('loginScreen');
+        const appScreen = document.getElementById('appScreen');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const userName = document.getElementById('userName');
+        const userRole = document.getElementById('userRole');
+        const currentOutlet = document.getElementById('currentOutlet');
+        const cartCount = document.getElementById('cartCount');
+        const totalItems = document.getElementById('totalItems');
+        const cartItems = document.getElementById('cartItems');
+        const itemSearch = document.getElementById('itemSearch');
+        const itemSuggestions = document.getElementById('itemSuggestions');
+        const ordersContainer = document.getElementById('ordersContainer');
+        const itemsList = document.getElementById('itemsList');
+        const outletsList = document.getElementById('outletsList');
+        const userList = document.getElementById('userList');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const clearCartBtn = document.getElementById('clearCart');
+        const confirmOrderBtn = document.getElementById('confirmOrder');
+        const notification = document.getElementById('notification');
+        const adminTab1 = document.getElementById('adminTab1');
+        const adminTab2 = document.getElementById('adminTab2');
+        const adminTab3 = document.getElementById('adminTab3');
+        const addOrderBtn = document.getElementById('addOrderBtn');
+
+        // Form elements
+        const itemForm = document.getElementById('itemForm');
+        const itemFormTitle = document.getElementById('itemFormTitle');
+        const itemName = document.getElementById('itemName');
+        const itemCategory = document.getElementById('itemCategory');
+        const itemUnit = document.getElementById('itemUnit');
+        const saveItemBtn = document.getElementById('saveItemBtn');
+        const cancelItemBtn = document.getElementById('cancelItemBtn');
+        const addItemBtn = document.getElementById('addItemBtn');
+
+        const outletForm = document.getElementById('outletForm');
+        const outletFormTitle = document.getElementById('outletFormTitle');
+        const outletName = document.getElementById('outletName');
+        const outletLocation = document.getElementById('outletLocation');
+        const saveOutletBtn = document.getElementById('saveOutletBtn');
+        const cancelOutletBtn = document.getElementById('cancelOutletBtn');
+        const addOutletBtn = document.getElementById('addOutletBtn');
+
+        const userForm = document.getElementById('userForm');
+        const userFormTitle = document.getElementById('userFormTitle');
+        const newUserName = document.getElementById('newUserName');
+        const newUserUsername = document.getElementById('newUserUsername');
+        const newUserPassword = document.getElementById('newUserPassword');
+        const newUserOutlet = document.getElementById('newUserOutlet');
+        const saveUserBtn = document.getElementById('saveUserBtn');
+        const cancelUserBtn = document.getElementById('cancelUserBtn');
+        const addUserBtn = document.getElementById('addUserBtn');
+
+        // Initialize the app
+        function init() {
+            setupEventListeners();
+        }
+
+        // Login function
+        function login(username, password) {
+            const user = database.users.find(u => u.username === username && u.password === password);
+            
+            if (user) {
+                currentUser = user;
+                showApp();
+                showNotification(`Welcome, ${user.name}!`, 'success');
+                return true;
+            } else {
+                showNotification('Invalid username or password', 'error');
+                return false;
+            }
+        }
+
+        // Show the main application
+        function showApp() {
+            loginScreen.style.display = 'none';
+            appScreen.style.display = 'block';
+            
+            // Update UI based on user
+            userName.textContent = `User: ${currentUser.name}`;
+            userRole.textContent = currentUser.role === 'admin' ? 'Admin' : 'User';
+            
+            // Show/hide tabs based on user role
+            if (currentUser.role === 'admin') {
+                adminTab1.style.display = 'flex';
+                adminTab2.style.display = 'flex';
+                adminTab3.style.display = 'flex';
+            } else {
+                adminTab1.style.display = 'none';
+                adminTab2.style.display = 'none';
+                adminTab3.style.display = 'none';
+                
+                // For regular users, show only their outlet
+                const outlet = database.outlets.find(o => o.id === currentUser.outletId);
+                if (outlet) {
+                    currentOutlet.textContent = outlet.name;
+                }
+            }
+            
+            // Load initial data
+            loadOrders();
+            if (currentUser.role === 'admin') {
+                loadItems();
+                loadOutlets();
+                loadUsers();
+            }
+            updateCart();
+        }
+
+        // Logout function
+        function logout() {
+            currentUser = null;
+            cart = [];
+            appScreen.style.display = 'none';
+            loginScreen.style.display = 'block';
+            usernameInput.value = '';
+            passwordInput.value = '';
+        }
+
+        // Generate order ID based on outlet name
+        function generateOrderId(outletId) {
+            const outlet = database.outlets.find(o => o.id === outletId);
+            if (!outlet) return 'UNKNOWN000001';
+            
+            // Get first 10 characters of outlet name, pad with zeros if needed
+            let outletPrefix = outlet.name.substring(0, 10).toUpperCase();
+            if (outletPrefix.length < 10) {
+                outletPrefix = outletPrefix.padEnd(10, '0');
+            }
+            
+            // Initialize counter for this outlet if not exists
+            if (!database.orderCounter[outletId]) {
+                database.orderCounter[outletId] = 1;
+            }
+            
+            // Generate sequential number with leading zeros
+            const orderNumber = database.orderCounter[outletId].toString().padStart(6, '0');
+            database.orderCounter[outletId]++;
+            
+            return `${outletPrefix}${orderNumber}`;
+        }
+
+        // Load and display orders in scrollable container
+        function loadOrders() {
+            ordersContainer.innerHTML = '';
+            
+            // Filter orders by current user's outlet if not admin
+            let userOrders = currentUser.role === 'admin' 
+                ? [...database.orders] 
+                : database.orders.filter(order => order.outletId === currentUser.outletId);
+            
+            // Sort orders by date (newest first)
+            userOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            
+            if (userOrders.length === 0) {
+                ordersContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>No orders found</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            userOrders.forEach(order => {
+                const outlet = database.outlets.find(o => o.id === order.outletId);
+                const orderCard = document.createElement('div');
+                orderCard.className = 'order-card';
+                
+                // Format items list
+                const itemsText = order.items.map(item => 
+                    `${item.name} (${item.quantity} ${item.unit})`
+                ).join(', ');
+                
+                orderCard.innerHTML = `
+                    <div class="order-header">
+                        <div>
+                            <div class="order-id">${order.id}</div>
+                            <div class="order-outlet">${outlet ? outlet.name : 'Unknown'}</div>
+                        </div>
+                        <div>
+                            <div class="order-date">${order.date}</div>
+                            <span class="order-status status-${order.status}">${order.status}</span>
+                        </div>
+                    </div>
+                    <div class="order-items">
+                        ${itemsText || 'No items'}
+                    </div>
+                    <div class="action-buttons" style="margin-top: 10px;">
+                        <button class="btn btn-warning btn-sm edit-order" data-id="${order.id}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        ${currentUser.role === 'admin' ? `
+                        <button class="btn btn-danger btn-sm delete-order" data-id="${order.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                        ` : ''}
+                    </div>
+                `;
+                
+                ordersContainer.appendChild(orderCard);
+            });
+        }
+
+        // Load and display items (admin only)
+        function loadItems() {
+            if (currentUser.role !== 'admin') return;
+            
+            itemsList.innerHTML = '';
+            
+            if (database.items.length === 0) {
+                itemsList.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="empty-state">
+                            <i class="fas fa-box-open"></i>
+                            <p>No items found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            database.items.forEach(item => {
+                const itemRow = document.createElement('tr');
+                
+                itemRow.innerHTML = `
+                    <td>${item.name}</td>
+                    <td>${item.category}</td>
+                    <td><span class="unit-badge">${item.unit}</span></td>
+                    <td class="action-buttons">
+                        <button class="btn btn-warning btn-sm edit-item" data-id="${item.id}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-danger btn-sm delete-item" data-id="${item.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
+                `;
+                
+                itemsList.appendChild(itemRow);
+            });
+        }
+
+        // Load and display outlets (admin only)
+        function loadOutlets() {
+            if (currentUser.role !== 'admin') return;
+            
+            outletsList.innerHTML = '';
+            
+            if (database.outlets.length === 0) {
+                outletsList.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="empty-state">
+                            <i class="fas fa-store"></i>
+                            <p>No outlets found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            database.outlets.forEach(outlet => {
+                const outletRow = document.createElement('tr');
+                
+                outletRow.innerHTML = `
+                    <td>${outlet.name}</td>
+                    <td>${outlet.location}</td>
+                    <td class="action-buttons">
+                        <button class="btn btn-warning btn-sm edit-outlet" data-id="${outlet.id}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-danger btn-sm delete-outlet" data-id="${outlet.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
+                `;
+                
+                outletsList.appendChild(outletRow);
+            });
+            
+            // Populate user outlet dropdown
+            newUserOutlet.innerHTML = '';
+            database.outlets.forEach(outlet => {
+                const option = document.createElement('option');
+                option.value = outlet.id;
+                option.textContent = outlet.name;
+                newUserOutlet.appendChild(option);
+            });
+        }
+
+        // Load and display users (admin only)
+        function loadUsers() {
+            if (currentUser.role !== 'admin') return;
+            
+            userList.innerHTML = '';
+            
+            if (database.users.length === 0) {
+                userList.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            <i class="fas fa-users"></i>
+                            <p>No users found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            database.users.forEach(user => {
+                const userRow = document.createElement('tr');
+                const outlet = database.outlets.find(o => o.id === user.outletId);
+                
+                userRow.innerHTML = `
+                    <td>${user.name}</td>
+                    <td>${user.username}</td>
+                    <td>${outlet ? outlet.name : 'Admin'}</td>
+                    <td>${user.role}</td>
+                    <td class="action-buttons">
+                        ${user.role !== 'admin' ? `
+                        <button class="btn btn-warning btn-sm edit-user" data-id="${user.id}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-danger btn-sm delete-user" data-id="${user.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                        ` : ''}
+                    </td>
+                `;
+                
+                userList.appendChild(userRow);
+            });
+        }
+
+        // Update cart display
+        function updateCart() {
+            cartItems.innerHTML = '';
+            
+            if (cart.length === 0) {
+                cartItems.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-shopping-cart"></i>
+                        <h3>Your cart is empty</h3>
+                        <p>Search and add items to get started</p>
+                    </div>
+                `;
+            } else {
+                cart.forEach(item => {
+                    const cartItem = document.createElement('div');
+                    cartItem.className = 'cart-item';
+                    
+                    cartItem.innerHTML = `
+                        <div class="cart-item-details">
+                            <div class="cart-item-name">${item.name} <span class="unit-badge">${item.unit}</span></div>
+                            <div class="cart-item-quantity">
+                                <input type="number" class="quantity-input" value="${item.quantity}" min="0.1" step="${item.unit === 'KGS' ? '0.1' : '1'}" data-id="${item.id}">
+                                <button class="remove-item" data-id="${item.id}">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    cartItems.appendChild(cartItem);
+                });
+            }
+            
+            // Update cart count
+            cartCount.textContent = `(${cart.length})`;
+            totalItems.textContent = cart.length;
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            notification.textContent = message;
+            notification.className = `notification notification-${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Login
+            loginBtn.addEventListener('click', () => {
+                const username = usernameInput.value;
+                const password = passwordInput.value;
+                
+                if (username && password) {
+                    login(username, password);
+                } else {
+                    showNotification('Please enter both username and password', 'error');
+                }
+            });
+            
+            // Allow login with Enter key
+            passwordInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    loginBtn.click();
+                }
+            });
+            
+            // Logout
+            logoutBtn.addEventListener('click', logout);
+            
+            // Tab switching
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabId = tab.getAttribute('data-tab');
+                    
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(tc => tc.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+            
+            // Item search with autocomplete
+            itemSearch.addEventListener('input', () => {
+                const searchTerm = itemSearch.value.toLowerCase();
+                
+                if (searchTerm.length < 2) {
+                    itemSuggestions.style.display = 'none';
+                    return;
+                }
+                
+                const filteredItems = database.items.filter(item => 
+                    item.name.toLowerCase().includes(searchTerm) ||
+                    item.category.toLowerCase().includes(searchTerm)
+                );
+                
+                if (filteredItems.length === 0) {
+                    itemSuggestions.style.display = 'none';
+                    return;
+                }
+                
+                itemSuggestions.innerHTML = '';
+                filteredItems.forEach(item => {
+                    const suggestion = document.createElement('div');
+                    suggestion.className = 'suggestion-item';
+                    
+                    // Create quantity input for the suggestion
+                    const quantityInput = document.createElement('input');
+                    quantityInput.type = 'number';
+                    quantityInput.min = item.unit === 'KGS' ? '0.1' : '1';
+                    quantityInput.step = item.unit === 'KGS' ? '0.1' : '1';
+                    quantityInput.value = item.unit === 'KGS' ? '1.0' : '1';
+                    quantityInput.style.width = '60px';
+                    quantityInput.style.padding = '5px';
+                    quantityInput.style.border = '1px solid #ddd';
+                    quantityInput.style.borderRadius = '3px';
+                    
+                    suggestion.innerHTML = `
+                        <span>${item.name} (${item.category}) - ${item.unit}</span>
+                    `;
+                    suggestion.appendChild(quantityInput);
+                    
+                    const addButton = document.createElement('button');
+                    addButton.className = 'btn btn-success btn-sm';
+                    addButton.innerHTML = '<i class="fas fa-plus"></i> Add';
+                    addButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const quantity = parseFloat(quantityInput.value);
+                        if (quantity > 0) {
+                            addToCart(item.id, quantity);
+                            itemSearch.value = '';
+                            itemSuggestions.style.display = 'none';
+                        }
+                    });
+                    
+                    suggestion.appendChild(addButton);
+                    itemSuggestions.appendChild(suggestion);
+                });
+                
+                itemSuggestions.style.display = 'block';
+            });
+            
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!itemSearch.contains(e.target) && !itemSuggestions.contains(e.target)) {
+                    itemSuggestions.style.display = 'none';
+                }
+            });
+            
+            // Clear cart
+            clearCartBtn.addEventListener('click', () => {
+                cart = [];
+                currentOrderId = null;
+                updateCart();
+                showNotification('Cart cleared', 'success');
+            });
+            
+            // Confirm order
+            confirmOrderBtn.addEventListener('click', () => {
+                if (cart.length === 0) {
+                    showNotification('Cart is empty', 'error');
+                    return;
+                }
+                
+                // Determine outlet ID
+                let outletId;
+                if (currentUser.role === 'admin') {
+                    // For admin, use the first outlet or prompt for selection
+                    outletId = database.outlets[0]?.id || 1;
+                } else {
+                    outletId = currentUser.outletId;
+                }
+                
+                if (currentOrderId) {
+                    // Update existing order
+                    const orderIndex = database.orders.findIndex(o => o.id === currentOrderId);
+                    if (orderIndex !== -1) {
+                        database.orders[orderIndex].items = [...cart];
+                        database.orders[orderIndex].date = new Date().toLocaleDateString();
+                        showNotification(`Order ${currentOrderId} updated successfully!`, 'success');
+                    }
+                } else {
+                    // Create new order
+                    const orderId = generateOrderId(outletId);
+                    const newOrder = {
+                        id: orderId,
+                        outletId: outletId,
+                        date: new Date().toLocaleDateString(),
+                        createdAt: new Date(),
+                        items: [...cart],
+                        status: 'pending'
+                    };
+                    
+                    database.orders.push(newOrder);
+                    showNotification(`Order ${orderId} created successfully!`, 'success');
+                }
+                
+                cart = [];
+                currentOrderId = null;
+                updateCart();
+                loadOrders();
+                
+                // Switch to orders tab
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(tc => tc.classList.remove('active'));
+                
+                document.querySelector('.tab[data-tab="orders"]').classList.add('active');
+                document.getElementById('orders-tab').classList.add('active');
+            });
+            
+            // Create new order
+            addOrderBtn.addEventListener('click', () => {
+                cart = [];
+                currentOrderId = null;
+                updateCart();
+                
+                // Switch to cart tab
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(tc => tc.classList.remove('active'));
+                
+                document.querySelector('.tab[data-tab="cart"]').classList.add('active');
+                document.getElementById('cart-tab').classList.add('active');
+                
+                showNotification('Ready to create new order. Search and add items to cart.', 'success');
+            });
+            
+            // Item form handlers (admin only)
+            addItemBtn.addEventListener('click', () => {
+                if (currentUser.role !== 'admin') return;
+                editingId = null;
+                itemFormTitle.textContent = 'Add New Item';
+                itemForm.style.display = 'block';
+                itemName.value = '';
+                itemCategory.value = '';
+                itemUnit.value = 'KGS';
+            });
+            
+            saveItemBtn.addEventListener('click', () => {
+                if (currentUser.role !== 'admin') return;
+                const name = itemName.value.trim();
+                const category = itemCategory.value.trim();
+                const unit = itemUnit.value;
+                
+                if (!name || !category) {
+                    showNotification('Please fill all required fields', 'error');
+                    return;
+                }
+                
+                if (editingId) {
+                    // Update existing item
+                    const itemIndex = database.items.findIndex(i => i.id === editingId);
+                    if (itemIndex !== -1) {
+                        database.items[itemIndex].name = name;
+                        database.items[itemIndex].category = category;
+                        database.items[itemIndex].unit = unit;
+                        showNotification('Item updated successfully', 'success');
+                    }
+                } else {
+                    // Add new item
+                    const newItem = {
+                        id: database.items.length + 1,
+                        name: name,
+                        category: category,
+                        unit: unit
+                    };
+                    database.items.push(newItem);
+                    showNotification('Item created successfully', 'success');
+                }
+                
+                itemForm.style.display = 'none';
+                loadItems();
+            });
+            
+            cancelItemBtn.addEventListener('click', () => {
+                itemForm.style.display = 'none';
+            });
+            
+            // Outlet form handlers (admin only)
+            addOutletBtn.addEventListener('click', () => {
+                if (currentUser.role !== 'admin') return;
+                editingId = null;
+                outletFormTitle.textContent = 'Add New Outlet';
+                outletForm.style.display = 'block';
+                outletName.value = '';
+                outletLocation.value = '';
+            });
+            
+            saveOutletBtn.addEventListener('click', () => {
+                if (currentUser.role !== 'admin') return;
+                const name = outletName.value.trim();
+                const location = outletLocation.value.trim();
+                
+                if (!name || !location) {
+                    showNotification('Please fill all required fields', 'error');
+                    return;
+                }
+                
+                if (editingId) {
+                    // Update existing outlet
+                    const outletIndex = database.outlets.findIndex(o => o.id === editingId);
+                    if (outletIndex !== -1) {
+                        database.outlets[outletIndex].name = name;
+                        database.outlets[outletIndex].location = location;
+                        showNotification('Outlet updated successfully', 'success');
+                    }
+                } else {
+                    // Add new outlet
+                    const newOutlet = {
+                        id: database.outlets.length + 1,
+                        name: name,
+                        location: location
+                    };
+                    database.outlets.push(newOutlet);
+                    showNotification('Outlet created successfully', 'success');
+                }
+                
+                outletForm.style.display = 'none';
+                loadOutlets();
+                loadOrders();
+            });
+            
+            cancelOutletBtn.addEventListener('click', () => {
+                outletForm.style.display = 'none';
+            });
+            
+            // User form handlers (admin only)
+            addUserBtn.addEventListener('click', () => {
+                if (currentUser.role !== 'admin') return;
+                editingId = null;
+                userFormTitle.textContent = 'Add New User';
+                userForm.style.display = 'block';
+                newUserName.value = '';
+                newUserUsername.value = '';
+                newUserPassword.value = '';
+                newUserOutlet.value = database.outlets[0]?.id || '';
+            });
+            
+            saveUserBtn.addEventListener('click', () => {
+                if (currentUser.role !== 'admin') return;
+                const name = newUserName.value.trim();
+                const username = newUserUsername.value.trim();
+                const password = newUserPassword.value;
+                const outletId = parseInt(newUserOutlet.value);
+                
+                if (!name || !username || !password || !outletId) {
+                    showNotification('Please fill all required fields', 'error');
+                    return;
+                }
+                
+                // Check if username already exists
+                if (database.users.find(u => u.username === username && u.id !== editingId)) {
+                    showNotification('Username already exists', 'error');
+                    return;
+                }
+                
+                if (editingId) {
+                    // Update existing user
+                    const userIndex = database.users.findIndex(u => u.id === editingId);
+                    if (userIndex !== -1) {
+                        database.users[userIndex].name = name;
+                        database.users[userIndex].username = username;
+                        database.users[userIndex].password = password;
+                        database.users[userIndex].outletId = outletId;
+                        showNotification('User updated successfully', 'success');
+                    }
+                } else {
+                    // Add new user
+                    const newUser = {
+                        id: database.users.length + 1,
+                        name: name,
+                        username: username,
+                        password: password,
+                        outletId: outletId,
+                        role: 'user'
+                    };
+                    database.users.push(newUser);
+                    showNotification('User created successfully', 'success');
+                }
+                
+                userForm.style.display = 'none';
+                loadUsers();
+            });
+            
+            cancelUserBtn.addEventListener('click', () => {
+                userForm.style.display = 'none';
+            });
+            
+            // Edit and delete handlers for orders
+            ordersContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('edit-order') || e.target.parentElement.classList.contains('edit-order')) {
+                    const orderId = e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id');
+                    const order = database.orders.find(o => o.id === orderId);
+                    
+                    if (order) {
+                        // Check if user has permission to edit this order
+                        if (currentUser.role !== 'admin' && order.outletId !== currentUser.outletId) {
+                            showNotification('You can only edit orders from your outlet', 'error');
+                            return;
+                        }
+                        
+                        // Load order items into cart
+                        cart = [...order.items];
+                        currentOrderId = orderId;
+                        updateCart();
+                        
+                        // Switch to cart tab
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tabContents.forEach(tc => tc.classList.remove('active'));
+                        
+                        document.querySelector('.tab[data-tab="cart"]').classList.add('active');
+                        document.getElementById('cart-tab').classList.add('active');
+                        
+                        showNotification(`Editing order ${orderId}. Make changes and confirm to update.`, 'success');
+                    }
+                }
+                
+                if (e.target.classList.contains('delete-order') || e.target.parentElement.classList.contains('delete-order')) {
+                    if (currentUser.role !== 'admin') return;
+                    
+                    const orderId = e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id');
+                    database.orders = database.orders.filter(o => o.id !== orderId);
+                    loadOrders();
+                    showNotification('Order deleted successfully', 'success');
+                }
+            });
+            
+            // Edit and delete handlers for items (admin only)
+            itemsList.addEventListener('click', (e) => {
+                if (currentUser.role !== 'admin') return;
+                
+                if (e.target.classList.contains('edit-item') || e.target.parentElement.classList.contains('edit-item')) {
+                    const itemId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    const item = database.items.find(i => i.id === itemId);
+                    
+                    if (item) {
+                        editingId = itemId;
+                        itemFormTitle.textContent = 'Edit Item';
+                        itemName.value = item.name;
+                        itemCategory.value = item.category;
+                        itemUnit.value = item.unit;
+                        itemForm.style.display = 'block';
+                    }
+                }
+                
+                if (e.target.classList.contains('delete-item') || e.target.parentElement.classList.contains('delete-item')) {
+                    const itemId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    database.items = database.items.filter(i => i.id !== itemId);
+                    loadItems();
+                    showNotification('Item deleted successfully', 'success');
+                }
+            });
+            
+            // Edit and delete handlers for outlets (admin only)
+            outletsList.addEventListener('click', (e) => {
+                if (currentUser.role !== 'admin') return;
+                
+                if (e.target.classList.contains('edit-outlet') || e.target.parentElement.classList.contains('edit-outlet')) {
+                    const outletId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    const outlet = database.outlets.find(o => o.id === outletId);
+                    
+                    if (outlet) {
+                        editingId = outletId;
+                        outletFormTitle.textContent = 'Edit Outlet';
+                        outletName.value = outlet.name;
+                        outletLocation.value = outlet.location;
+                        outletForm.style.display = 'block';
+                    }
+                }
+                
+                if (e.target.classList.contains('delete-outlet') || e.target.parentElement.classList.contains('delete-outlet')) {
+                    const outletId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    database.outlets = database.outlets.filter(o => o.id !== outletId);
+                    loadOutlets();
+                    showNotification('Outlet deleted successfully', 'success');
+                }
+            });
+            
+            // Edit and delete handlers for users (admin only)
+            userList.addEventListener('click', (e) => {
+                if (currentUser.role !== 'admin') return;
+                
+                if (e.target.classList.contains('edit-user') || e.target.parentElement.classList.contains('edit-user')) {
+                    const userId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    const user = database.users.find(u => u.id === userId);
+                    
+                    if (user) {
+                        editingId = userId;
+                        userFormTitle.textContent = 'Edit User';
+                        newUserName.value = user.name;
+                        newUserUsername.value = user.username;
+                        newUserPassword.value = user.password;
+                        newUserOutlet.value = user.outletId;
+                        userForm.style.display = 'block';
+                    }
+                }
+                
+                if (e.target.classList.contains('delete-user') || e.target.parentElement.classList.contains('delete-user')) {
+                    const userId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    
+                    if (userId === currentUser.id) {
+                        showNotification('You cannot delete your own account', 'error');
+                        return;
+                    }
+                    
+                    database.users = database.users.filter(u => u.id !== userId);
+                    loadUsers();
+                    showNotification('User deleted successfully', 'success');
+                }
+            });
+            
+            // Update quantity in cart
+            cartItems.addEventListener('change', (e) => {
+                if (e.target.classList.contains('quantity-input')) {
+                    const itemId = parseInt(e.target.getAttribute('data-id'));
+                    const newQuantity = parseFloat(e.target.value);
+                    
+                    if (newQuantity <= 0) {
+                        // Remove item if quantity is 0 or negative
+                        cart = cart.filter(item => item.id !== itemId);
+                        showNotification('Item removed from cart', 'success');
+                    } else {
+                        // Update quantity
+                        const cartItem = cart.find(item => item.id === itemId);
+                        if (cartItem) {
+                            cartItem.quantity = newQuantity;
+                        }
+                    }
+                    
+                    updateCart();
+                }
+            });
+            
+            // Remove item from cart
+            cartItems.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-item') || e.target.parentElement.classList.contains('remove-item')) {
+                    const itemId = parseInt(e.target.getAttribute('data-id') || e.target.parentElement.getAttribute('data-id'));
+                    cart = cart.filter(item => item.id !== itemId);
+                    updateCart();
+                    showNotification('Item removed from cart', 'success');
+                }
+            });
+        }
+
+        // Add item to cart
+        function addToCart(itemId, quantity = null) {
+            const item = database.items.find(i => i.id === itemId);
+            
+            if (!item) return;
+            
+            // If quantity not provided, use default based on unit
+            if (quantity === null) {
+                quantity = item.unit === 'KGS' ? 1.0 : 1;
+            }
+            
+            const existingItem = cart.find(cartItem => cartItem.id === itemId);
+            
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cart.push({
+                    id: item.id,
+                    name: item.name,
+                    quantity: quantity,
+                    unit: item.unit
+                });
+            }
+            
+            updateCart();
+            showNotification(`${quantity} ${item.unit} of ${item.name} added to cart`, 'success');
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
