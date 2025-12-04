@@ -1300,6 +1300,9 @@
                 let localOrders = [...database.orders];
                 let supabaseOrders = [];
                 
+                console.log('Starting loadOrders...');
+                console.log('Local orders count:', localOrders.length);
+                
                 // Try to get orders from Supabase
                 try {
                     const { data, error } = await supabase
@@ -1313,6 +1316,7 @@
                     }
                     
                     supabaseOrders = data || [];
+                    console.log('Supabase orders fetched:', supabaseOrders.length);
                     
                 } catch (supabaseError) {
                     console.error('Supabase connection failed:', supabaseError);
@@ -1322,8 +1326,10 @@
                     return;
                 }
                 
-                // Merge strategy: Supabase as source of truth, merge with local
+                // Merge orders with proper deletion filtering
                 const mergedOrders = await mergeOrders(supabaseOrders, localOrders);
+                
+                console.log('Merged orders count:', mergedOrders.length);
                 
                 // Update local database with merged orders
                 database.orders = mergedOrders;
@@ -1340,69 +1346,227 @@
             }
         }
 
-        async function mergeOrders(supabaseOrders, localOrders) {
-            const merged = [...supabaseOrders];
-            const seenIds = new Set(supabaseOrders.map(order => order.id));
+        // Sync locally deleted orders to Supabase
+        async function syncLocalDeletionsToSupabase() {
+            if (!navigator.onLine) {
+                console.log('Offline, cannot sync deletions');
+                return;
+            }
             
-            // Filter out orders that were deleted locally
-            const validLocalOrders = localOrders.filter(localOrder => 
-                !database.deletedOrders.includes(localOrder.id)
-            );
+            const unsyncedDeletions = database.deletedOrders.filter(d => !d.synced);
             
-            // Add local orders that don't exist in Supabase and aren't marked as deleted
-            validLocalOrders.forEach(localOrder => {
-                if (!seenIds.has(localOrder.id)) {
-                    // This is a local-only order, upload it to Supabase
-                    uploadOrderToSupabase(localOrder);
-                    merged.push(localOrder);
-                    seenIds.add(localOrder.id);
-                } else {
-                    // Order exists in both, resolve conflicts (Supabase wins)
-                    console.log(`Order ${localOrder.id} exists in both, using Supabase version`);
-                }
-            });
+            if (unsyncedDeletions.length === 0) {
+                console.log('No unsynced deletions');
+                return;
+            }
             
-            // Also check Supabase for orders that should be deleted locally
-            supabaseOrders.forEach(supabaseOrder => {
-                if (database.deletedOrders.includes(supabaseOrder.id)) {
-                    // This order was deleted locally, remove it from Supabase
-                    deleteOrderFromSupabase(supabaseOrder.id);
+            console.log('Syncing', unsyncedDeletions.length, 'local deletions to Supabase');
+            
+            for (const deletion of unsyncedDeletions) {
+                try {
+                    console.log('Syncing deletion:', deletion.order_id);
                     
-                    // Remove from merged array
-                    const deleteIndex = merged.findIndex(order => order.id === supabaseOrder.id);
-                    if (deleteIndex !== -1) {
-                        merged.splice(deleteIndex, 1);
+                    // Mark as deleted in Supabase
+                    const { error: markError } = await supabase
+                        .from('deleted_orders')
+                        .upsert({
+                            order_id: deletion.order_id,
+                            deleted_by_user_id: deletion.deleted_by_user_id,
+                            deleted_at: deletion.deleted_at,
+                            synced: true
+                        }, {
+                            onConflict: 'order_id'
+                        });
+                    
+                    if (markError) {
+                        console.error('Error syncing deletion to Supabase:', markError);
+                        continue;
                     }
+                    
+                    // Delete from orders table in Supabase
+                    const { error: deleteError } = await supabase
+                        .from('orders')
+                        .delete()
+                        .eq('id', deletion.order_id);
+                    
+                    if (deleteError) {
+                        console.error('Error deleting order from Supabase:', deleteError);
+                        continue;
+                    }
+                    
+                    // Mark as synced locally
+                    const index = database.deletedOrders.findIndex(d => d.order_id === deletion.order_id);
+                    if (index !== -1) {
+                        database.deletedOrders[index].synced = true;
+                    }
+                    
+                    console.log('Successfully synced deletion:', deletion.order_id);
+                    
+                } catch (error) {
+                    console.error('Error processing deletion sync:', error);
                 }
-            });
+            }
             
-            // Sort by date (newest first)
-            merged.sort((a, b) => {
-                const dateA = a.created_at || a.createdAt || a.date;
-                const dateB = b.created_at || b.createdAt || b.date;
-                return new Date(dateB) - new Date(dateA);
-            });
-            
-            return merged;
+            // Save updated sync status
+            saveToLocalStorage();
+            console.log('Local deletions sync complete');
         }
 
-        // Function to delete orders from Supabase (for sync)
+        async function mergeOrders(supabaseOrders, localOrders) {
+            console.log('=== mergeOrders called ===');
+            console.log('Supabase orders:', supabaseOrders.length);
+            console.log('Local orders:', localOrders.length);
+            console.log('Local deleted orders:', database.deletedOrders);
+            
+            try {
+                // Get list of deleted orders from Supabase
+                let supabaseDeletedIds = new Set();
+                try {
+                    const { data: supabaseDeletedOrders, error } = await supabase
+                        .from('deleted_orders')
+                        .select('order_id');
+                    
+                    if (!error && supabaseDeletedOrders) {
+                        supabaseDeletedOrders.forEach(d => {
+                            console.log('Supabase deleted order:', d.order_id);
+                            supabaseDeletedIds.add(d.order_id);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error fetching deleted orders from Supabase:', error);
+                }
+                
+                // Create Set of locally deleted order IDs
+                const localDeletedIds = new Set();
+                database.deletedOrders.forEach(d => {
+                    console.log('Locally deleted order:', d.order_id);
+                    localDeletedIds.add(d.order_id);
+                });
+                
+                console.log('Supabase deleted IDs:', Array.from(supabaseDeletedIds));
+                console.log('Local deleted IDs:', Array.from(localDeletedIds));
+                
+                // Filter out orders that were deleted in Supabase
+                const filteredSupabaseOrders = supabaseOrders.filter(order => {
+                    const isDeleted = supabaseDeletedIds.has(order.id);
+                    if (isDeleted) {
+                        console.log('Filtering out Supabase-deleted order:', order.id);
+                    }
+                    return !isDeleted;
+                });
+                
+                console.log('Filtered Supabase orders:', filteredSupabaseOrders.length);
+                
+                // Filter local orders against local deletions
+                const validLocalOrders = localOrders.filter(localOrder => {
+                    const isLocallyDeleted = localDeletedIds.has(localOrder.id);
+                    if (isLocallyDeleted) {
+                        console.log('Filtering out locally deleted order:', localOrder.id);
+                    }
+                    return !isLocallyDeleted;
+                });
+                
+                console.log('Valid local orders:', validLocalOrders.length);
+                
+                // Start with Supabase orders as base
+                const merged = [...filteredSupabaseOrders];
+                const seenIds = new Set(filteredSupabaseOrders.map(order => order.id));
+                
+                // Add valid local orders that don't exist in Supabase
+                validLocalOrders.forEach(localOrder => {
+                    if (!seenIds.has(localOrder.id)) {
+                        // Also check if not deleted in Supabase
+                        if (!supabaseDeletedIds.has(localOrder.id)) {
+                            console.log('Adding local order to merge:', localOrder.id);
+                            merged.push(localOrder);
+                            seenIds.add(localOrder.id);
+                            
+                            // Upload to Supabase if not already there
+                            uploadOrderToSupabase(localOrder);
+                        }
+                    }
+                });
+                
+                // Also check for local orders that exist in Supabase but are marked as deleted locally
+                // We need to delete them from Supabase
+                localDeletedIds.forEach(deletedOrderId => {
+                    if (!supabaseDeletedIds.has(deletedOrderId)) {
+                        // This order is marked as deleted locally but not in Supabase
+                        console.log('Need to sync local deletion to Supabase:', deletedOrderId);
+                        
+                        // Find the order in Supabase
+                        const orderInSupabase = supabaseOrders.find(o => o.id === deletedOrderId);
+                        if (orderInSupabase) {
+                            console.log('Order exists in Supabase, need to delete it:', deletedOrderId);
+                            // Delete from Supabase
+                            deleteOrderFromSupabase(deletedOrderId);
+                            
+                            // Remove from merged array if it was added
+                            const index = merged.findIndex(o => o.id === deletedOrderId);
+                            if (index !== -1) {
+                                merged.splice(index, 1);
+                                console.log('Removed deleted order from merged array:', deletedOrderId);
+                            }
+                        }
+                    }
+                });
+                
+                console.log('Final merged orders:', merged.length);
+                
+                // Sort by date (newest first)
+                merged.sort((a, b) => {
+                    const dateA = a.created_at || a.createdAt || a.date;
+                    const dateB = b.created_at || b.createdAt || b.date;
+                    return new Date(dateB) - new Date(dateA);
+                });
+                
+                return merged;
+                
+            } catch (error) {
+                console.error('Error in mergeOrders:', error);
+                // Fallback: use Supabase orders only
+                return supabaseOrders || [];
+            }
+        }
+
+        // Function to delete orders from Supabase
         async function deleteOrderFromSupabase(orderId) {
             try {
-                const { error } = await supabase
+                console.log('Deleting order from Supabase:', orderId);
+                
+                // First, mark as deleted in deleted_orders table
+                const { error: markError } = await supabase
+                    .from('deleted_orders')
+                    .upsert({
+                        order_id: orderId,
+                        deleted_by_user_id: currentUser.id,
+                        deleted_at: new Date().toISOString(),
+                        synced: true
+                    }, {
+                        onConflict: 'order_id'
+                    });
+                
+                if (markError) {
+                    console.error('Error marking order as deleted in Supabase:', markError);
+                    return false;
+                }
+                
+                // Then delete from orders table
+                const { error: deleteError } = await supabase
                     .from('orders')
                     .delete()
                     .eq('id', orderId);
                 
-                if (error) {
-                    console.error('Error deleting order from Supabase:', error);
+                if (deleteError) {
+                    console.error('Error deleting order from Supabase orders table:', deleteError);
                     return false;
                 }
                 
-                console.log(`Order ${orderId} deleted from Supabase during sync`);
+                console.log('Successfully deleted order from Supabase:', orderId);
                 return true;
+                
             } catch (error) {
-                console.error('Error deleting order from Supabase:', error);
+                console.error('Error in deleteOrderFromSupabase:', error);
                 return false;
             }
         }
@@ -3175,6 +3339,7 @@
                 if (navigator.onLine && currentUser) {
                     loadOrders();
                     syncDeletedOrders(); 
+                    syncLocalDeletionsToSupabase();
                 }
             }, 30000);
 
