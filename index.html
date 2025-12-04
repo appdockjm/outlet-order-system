@@ -1659,55 +1659,48 @@
             try {
                 showSyncStatus('Deleting order...', 'pending');
                 
-                // First, mark as deleted in Supabase
+                // First, try to mark as deleted in Supabase
                 let supabaseSuccess = false;
+                let supabaseError = null;
+                
                 try {
-                    // Insert into deleted_orders table
+                    const deletionRecord = {
+                        order_id: orderId,
+                        deleted_by_user_id: currentUser.id,
+                        deleted_at: new Date().toISOString(),
+                        synced: true
+                    };
+                    
                     const { error } = await supabase
                         .from('deleted_orders')
-                        .upsert({
-                            order_id: orderId,
-                            deleted_by_user_id: currentUser.id,
-                            deleted_at: new Date().toISOString(),
-                            synced: true
-                        }, {
-                            onConflict: 'order_id',
-                            ignoreDuplicates: true
+                        .upsert(deletionRecord, {
+                            onConflict: 'order_id'
                         });
                     
                     if (error) {
+                        supabaseError = error;
                         console.error('Error marking order as deleted in Supabase:', error);
-                        throw error;
-                    }
-                    
-                    // Now delete from orders table
-                    const { error: deleteError } = await supabase
-                        .from('orders')
-                        .delete()
-                        .eq('id', orderId);
-                    
-                    if (deleteError) {
-                        console.error('Error deleting order from Supabase:', deleteError);
+                        
+                        // If it's an RLS error, try a different approach
+                        if (error.code === '42501') {
+                            console.log('RLS error detected, trying alternative...');
+                            // Store locally and sync later
+                            await storeDeletionLocally(orderId);
+                        } else {
+                            throw error;
+                        }
                     } else {
                         supabaseSuccess = true;
+                        console.log('Order marked as deleted in Supabase');
                     }
                     
-                } catch (supabaseError) {
-                    console.error('Supabase delete failed:', supabaseError);
-                    
-                    // Mark for sync later
-                    if (!database.deletedOrders.some(d => d.order_id === orderId)) {
-                        database.deletedOrders.push({
-                            order_id: orderId,
-                            deleted_by_user_id: currentUser.id,
-                            deleted_at: new Date().toISOString(),
-                            synced: false
-                        });
-                        saveToLocalStorage();
-                    }
+                } catch (error) {
+                    console.error('Supabase delete failed:', error);
+                    // Store locally for later sync
+                    await storeDeletionLocally(orderId);
                 }
                 
-                // Always delete from local storage
+                // Always delete from local orders
                 const index = database.orders.findIndex(o => o.id === orderId);
                 if (index !== -1) {
                     database.orders.splice(index, 1);
@@ -1718,8 +1711,10 @@
                 
                 if (supabaseSuccess) {
                     showSyncStatus('✓ Order deleted from cloud', 'success');
+                    showNotification(`Order ${orderId} deleted successfully`, 'success');
                 } else {
-                    showSyncStatus('✓ Order deleted locally (offline)', 'warning');
+                    showSyncStatus('✓ Order deleted locally', 'warning');
+                    showNotification(`Order ${orderId} deleted locally. ${supabaseError ? '(RLS policy issue)' : ''}`, 'warning');
                 }
                 
                 // Clear cart if deleting active order
@@ -1731,26 +1726,27 @@
                 
             } catch (error) {
                 console.error('Error deleting order:', error);
-                // Fallback to local storage
-                const index = database.orders.findIndex(o => o.id === orderId);
-                if (index !== -1) {
-                    database.orders.splice(index, 1);
-                    
-                    // Track this deletion locally
-                    if (!database.deletedOrders.some(d => d.order_id === orderId)) {
-                        database.deletedOrders.push({
-                            order_id: orderId,
-                            deleted_by_user_id: currentUser.id,
-                            deleted_at: new Date().toISOString(),
-                            synced: false
-                        });
-                    }
-                    
-                    saveToLocalStorage();
-                    loadOrders();
-                    showNotification('Order deleted locally', 'success');
-                }
+                showNotification('Error deleting order', 'error');
             }
+        }
+
+        // Helper function to store deletion locally
+        async function storeDeletionLocally(orderId) {
+            const deletionRecord = {
+                order_id: orderId,
+                deleted_by_user_id: currentUser.id,
+                deleted_at: new Date().toISOString(),
+                synced: false
+            };
+            
+            // Remove any existing record for this order
+            database.deletedOrders = database.deletedOrders.filter(d => d.order_id !== orderId);
+            
+            // Add new record
+            database.deletedOrders.push(deletionRecord);
+            saveToLocalStorage();
+            
+            console.log('Deletion stored locally for later sync:', orderId);
         }
 
         async function saveItem(item) {
