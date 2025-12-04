@@ -677,6 +677,26 @@
             border-color: #95a5a6;
         }
 
+        .order-card.completed {
+            opacity: 0.8;
+            background: #f8f9fa;
+            border-left: 4px solid var(--secondary);
+        }
+
+        .order-card.completed .order-id {
+            color: var(--secondary);
+        }
+
+        .order-card.completed .edit-order {
+            display: none !important;
+        }
+
+        /* Disabled button style */
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -2301,11 +2321,18 @@
                     `${item.name} (${item.quantity} ${item.unit})`
                 ).join(', ');
                 
-                // Use the actual order ID from the data, not a generated one
+                // Use the actual order ID from the data
                 const orderId = order.id;
                 
                 // Display "Received" to users but store as "completed" in database
                 const displayStatus = order.status === 'completed' ? 'received' : order.status;
+                
+                // Check if order can be edited
+                const isCompleted = order.status === 'completed';
+                const canEdit = !isCompleted && (
+                    currentUser.role === 'admin' || 
+                    (currentUser.role === 'user' && outletId === currentUser.outlet_id)
+                );
                 
                 orderCard.innerHTML = `
                     <div class="order-header">
@@ -2322,9 +2349,11 @@
                         ${itemsText || 'No items'}
                     </div>
                     <div class="action-buttons" style="margin-top: 10px;">
+                        ${canEdit ? `
                         <button class="btn btn-warning btn-sm edit-order" data-id="${orderId}">
                             <i class="fas fa-edit"></i> Edit
                         </button>
+                        ` : ''}
                         <button class="btn btn-info btn-sm pdf-order" data-id="${orderId}">
                             <i class="fas fa-file-pdf"></i> PDF
                         </button>
@@ -2338,8 +2367,8 @@
                             <i class="fas fa-trash"></i> Delete
                         </button>
                         ` : `
-                        <!-- Allow users to delete their own orders -->
-                        ${outletId === currentUser.outlet_id ? `
+                        <!-- Allow users to delete their own pending orders -->
+                        ${!isCompleted && outletId === currentUser.outlet_id ? `
                         <button class="btn btn-danger btn-sm delete-order" data-id="${orderId}">
                             <i class="fas fa-trash"></i> Delete
                         </button>
@@ -2362,7 +2391,7 @@
                     return;
                 }
                 
-                // Update order status to "completed" (to match Supabase constraint)
+                // Update order status to "completed"
                 order.status = 'completed';
                 order.updated_at = new Date().toISOString();
                 
@@ -2396,6 +2425,22 @@
                     showNotification(`Order ${orderId} marked as received`, 'success');
                 } else {
                     showNotification(`Order ${orderId} marked as received (offline)`, 'warning');
+                }
+                
+                // Clear cart if editing this order
+                if (currentOrderId === orderId) {
+                    cart = [];
+                    currentOrderId = null;
+                    updateCart();
+                    
+                    // Switch back to orders tab if currently editing
+                    if (document.getElementById('cart-tab').classList.contains('active')) {
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tabContents.forEach(tc => tc.classList.remove('active'));
+                        document.querySelector('.tab[data-tab="orders"]').classList.add('active');
+                        document.getElementById('orders-tab').classList.add('active');
+                        showNotification('Order was marked as received. Editing cancelled.', 'info');
+                    }
                 }
                 
             } catch (error) {
@@ -3533,24 +3578,25 @@
                     return;
                 }
                 
-                // Determine outlet ID - FIXED VERSION
+                // Check if we're editing a completed order
+                if (currentOrderId) {
+                    const order = database.orders.find(o => o.id === currentOrderId);
+                    if (order && order.status === 'completed') {
+                        showNotification('Cannot edit received orders. Please create a new order.', 'error');
+                        return;
+                    }
+                }
+                
+                // Determine outlet ID
                 let outletId;
                 if (currentUser.role === 'admin') {
-                    // For admin, use the first outlet as default
                     outletId = database.outlets.length > 0 ? database.outlets[0].id : 1;
-                    console.log('Admin creating order for outlet:', outletId);
                 } else {
-                    // For regular users, use their assigned outlet
                     outletId = currentUser.outlet_id || currentUser.outletId;
-                    console.log('User creating order for outlet:', outletId);
                 }
                 
                 // Validate outletId
                 if (!outletId) {
-                    console.error('No outlet found for user:', currentUser);
-                    console.error('User outlet_id:', currentUser.outlet_id);
-                    console.error('User outletId:', currentUser.outletId);
-                    console.error('Available outlets:', database.outlets);
                     showNotification('Error: No outlet assigned. Please contact administrator.', 'error');
                     return;
                 }
@@ -3558,29 +3604,28 @@
                 // Verify outlet exists
                 const outletExists = database.outlets.some(outlet => outlet.id === outletId);
                 if (!outletExists) {
-                    console.error('Outlet does not exist:', outletId);
                     showNotification('Error: Invalid outlet assigned. Please contact administrator.', 'error');
                     return;
                 }
                 
                 if (currentOrderId) {
-                    // Update existing order
+                    // Update existing order - but first check if it's not completed
                     const orderIndex = database.orders.findIndex(o => o.id === currentOrderId);
-                    if (orderIndex !== -1) {
-                        // Update with correct field names
+                    if (orderIndex !== -1 && database.orders[orderIndex].status !== 'completed') {
                         database.orders[orderIndex].items = [...cart];
                         database.orders[orderIndex].date = new Date().toLocaleDateString();
                         database.orders[orderIndex].outletId = outletId;
                         database.orders[orderIndex].outlet_id = outletId;
                         database.orders[orderIndex].updated_at = new Date().toISOString();
                         
-                        // Save to Supabase or local storage
                         await saveOrder(database.orders[orderIndex]);
-                        
                         showNotification(`Order ${currentOrderId} updated successfully!`, 'success');
+                    } else {
+                        showNotification('Cannot edit received orders', 'error');
+                        return;
                     }
                 } else {
-                    // Create new order - FIXED
+                    // Create new order
                     const orderId = generateOrderId(outletId);
                     const newOrder = {
                         id: orderId,
@@ -3593,11 +3638,7 @@
                         status: 'pending'
                     };
                     
-                    console.log('Creating new order:', newOrder);
-                    
-                    // Save to Supabase or local storage
                     await saveOrder(newOrder);
-                    
                     showNotification(`Order ${orderId} created successfully!`, 'success');
                 }
                 
@@ -3609,7 +3650,6 @@
                 // Switch to orders tab
                 tabs.forEach(t => t.classList.remove('active'));
                 tabContents.forEach(tc => tc.classList.remove('active'));
-                
                 document.querySelector('.tab[data-tab="orders"]').classList.add('active');
                 document.getElementById('orders-tab').classList.add('active');
             });
@@ -3638,23 +3678,28 @@
                 let button = target.closest('.edit-order') || 
                             target.closest('.pdf-order') || 
                             target.closest('.delete-order') ||
-                            target.closest('.mark-received'); // Add this line
+                            target.closest('.mark-received');
                 
                 if (!button) return;
                 
                 const orderId = button.getAttribute('data-id');
                 
-                // Find order by ID - check both local database and Supabase data
+                // Find order by ID
                 let order = database.orders.find(o => o.id === orderId);
                 
                 if (!order) {
                     console.log('Order not found:', orderId);
-                    console.log('Available orders:', database.orders.map(o => o.id));
                     showNotification(`Order ${orderId} not found`, 'error');
                     return;
                 }
                 
                 if (button.classList.contains('edit-order')) {
+                    // Check if order is completed/received
+                    if (order.status === 'completed') {
+                        showNotification('Cannot edit received orders', 'error');
+                        return;
+                    }
+                    
                     // Check if user has permission to edit this order
                     const outletId = order.outlet_id || order.outletId;
                     if (currentUser.role !== 'admin' && outletId !== currentUser.outlet_id) {
@@ -3662,7 +3707,7 @@
                         return;
                     }
                     
-                    // Properly load order items into cart
+                    // Load order items into cart
                     cart = Array.isArray(order.items) ? order.items : [];
                     currentOrderId = orderId;
                     updateCart();
@@ -3672,7 +3717,7 @@
                     tabContents.forEach(tc => tc.classList.remove('active'));
                     
                     document.querySelector('.tab[data-tab="cart"]').classList.add('active');
-                    document.getElementById('cart-tab').classlist.add('active');
+                    document.getElementById('cart-tab').classList.add('active');
                     
                     showNotification(`Editing order ${orderId}. Make changes and confirm to update.`, 'success');
                 }
@@ -3693,6 +3738,13 @@
                 else if (button.classList.contains('delete-order')) {
                     // Check permissions
                     const outletId = order.outlet_id || order.outletId;
+                    
+                    // Check if order is completed
+                    if (order.status === 'completed') {
+                        showNotification('Cannot delete received orders', 'error');
+                        return;
+                    }
+                    
                     if (currentUser.role !== 'admin' && outletId !== currentUser.outlet_id) {
                         showNotification('You can only delete orders from your outlet', 'error');
                         return;
