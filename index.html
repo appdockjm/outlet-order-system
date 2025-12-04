@@ -1179,17 +1179,25 @@
                     }
                 }
                 
+                // In the login function, after successful login:
                 if (data) {
                     currentUser = data;
-                    // Ensure outlets are loaded for the user
-                    await loadOutletsForUser();
+                    
+                    // Ensure the user has a valid outlet_id
+                    if (currentUser.role === 'user' && (!currentUser.outlet_id || currentUser.outlet_id === null)) {
+                        // Assign default outlet if none exists
+                        if (database.outlets.length > 0) {
+                            currentUser.outlet_id = database.outlets[0].id;
+                            console.log('Assigned default outlet to user:', currentUser.outlet_id);
+                        } else {
+                            showNotification('Warning: No outlets found. User cannot create orders.', 'warning');
+                        }
+                    }
+                    
                     showApp();
                     showNotification(`Welcome, ${data.name}!`, 'success');
                     return true;
                 }
-                
-                showNotification('Invalid username or password', 'error');
-                return false;
                 
             } catch (error) {
                 console.error('Login error:', error);
@@ -1433,6 +1441,9 @@
                     users = [...database.users];
                 } else {
                     users = data || [];
+                    // Update local database with data from Supabase
+                    database.users = users;
+                    saveToLocalStorage();
                 }
                 
                 displayUsers(users);
@@ -1741,26 +1752,44 @@
             if (currentUser.role !== 'admin') return;
             
             try {
+                // Ensure consistent field names
+                const userToSave = {
+                    id: user.id,
+                    name: user.name,
+                    username: user.username,
+                    password: user.password,
+                    outlet_id: user.outlet_id || user.outletId, // Prioritize outlet_id
+                    role: user.role || 'user'
+                };
+                
+                // Remove duplicate field if exists
+                if (userToSave.outletId) {
+                    delete userToSave.outletId;
+                }
+                
                 // Try Supabase first
                 const { error } = await supabase
                     .from('users')
-                    .upsert({
-                        id: user.id,
-                        name: user.name,
-                        username: user.username,
-                        password: user.password,
-                        outlet_id: user.outletId,
-                        role: user.role
-                    });
+                    .upsert(userToSave);
                 
                 if (error) {
                     console.error('Supabase save user error:', error);
                     // Fallback to local storage
                     const existingIndex = database.users.findIndex(u => u.id === user.id);
                     if (existingIndex !== -1) {
-                        database.users[existingIndex] = user;
+                        database.users[existingIndex] = userToSave;
                     } else {
-                        database.users.push(user);
+                        database.users.push(userToSave);
+                    }
+                    saveToLocalStorage();
+                } else {
+                    console.log('User saved to Supabase:', userToSave);
+                    // Update local storage too
+                    const existingIndex = database.users.findIndex(u => u.id === user.id);
+                    if (existingIndex !== -1) {
+                        database.users[existingIndex] = userToSave;
+                    } else {
+                        database.users.push(userToSave);
                     }
                     saveToLocalStorage();
                 }
@@ -1770,11 +1799,20 @@
             } catch (error) {
                 console.error('Error saving user:', error);
                 // Fallback to local storage
+                const userToSave = {
+                    id: user.id,
+                    name: user.name,
+                    username: user.username,
+                    password: user.password,
+                    outlet_id: user.outlet_id || user.outletId,
+                    role: user.role || 'user'
+                };
+                
                 const existingIndex = database.users.findIndex(u => u.id === user.id);
                 if (existingIndex !== -1) {
-                    database.users[existingIndex] = user;
+                    database.users[existingIndex] = userToSave;
                 } else {
-                    database.users.push(user);
+                    database.users.push(userToSave);
                 }
                 saveToLocalStorage();
                 return true;
@@ -2152,37 +2190,47 @@
                 return;
             }
             
+            // Ensure outlets are loaded
+            if (database.outlets.length === 0) {
+                loadOutlets();
+            }
+            
             users.forEach(user => {
                 const userRow = document.createElement('tr');
                 
                 // Handle both field name formats for outlet ID
                 const outletId = user.outlet_id || user.outletId;
-                const outlet = database.outlets.find(o => o.id === outletId);
+                let outletName = 'No Outlet';
                 
-                // Debug logging
-                console.log('Displaying user:', user);
-                console.log('User outlet ID:', outletId);
-                console.log('Found outlet:', outlet);
-                
-                // Highlight users with no outlet assigned
-                const hasOutlet = outletId && outlet;
-                const outletDisplay = hasOutlet ? outlet.name : 
-                                    `<span style="color: var(--danger); font-weight: bold;">NO OUTLET</span>`;
+                if (outletId) {
+                    const outlet = database.outlets.find(o => o.id === outletId);
+                    if (outlet) {
+                        // Clean the outlet name for display
+                        let cleanName = outlet.name;
+                        if (typeof cleanName === 'string') {
+                            cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
+                        }
+                        outletName = cleanName;
+                    } else {
+                        outletName = `<span style="color: var(--danger); font-weight: bold;">Outlet ID ${outletId} Not Found</span>`;
+                    }
+                } else {
+                    outletName = `<span style="color: var(--warning); font-weight: bold;">No Outlet Assigned</span>`;
+                }
                 
                 userRow.innerHTML = `
                     <td>${user.name}</td>
                     <td>${user.username}</td>
-                    <td>${outletDisplay}</td>
-                    <td>${user.role}</td>
+                    <td>${outletName}</td>
+                    <td><span class="role-badge">${user.role}</span></td>
                     <td class="action-buttons">
-                        ${user.role !== 'admin' ? `
                         <button class="btn btn-warning btn-sm edit-user" data-id="${user.id}">
                             <i class="fas fa-edit"></i> Edit
                         </button>
-                        <button class="btn btn-danger btn-sm delete-user" data-id="${user.id}">
+                        <button class="btn btn-danger btn-sm delete-user" data-id="${user.id}" 
+                            ${user.role === 'admin' ? 'disabled title="Cannot delete admin users"' : ''}>
                             <i class="fas fa-trash"></i> Delete
                         </button>
-                        ` : ''}
                     </td>
                 `;
                 
@@ -2201,6 +2249,7 @@
         addUserBtn.addEventListener('click', async () => {
             if (currentUser.role !== 'admin') return;
             
+            // Ensure outlets are loaded
             await ensureOutletsLoaded();
             
             editingId = null;
@@ -2212,6 +2261,22 @@
             
             // Make sure outlets are loaded before setting default value
             if (database.outlets.length > 0) {
+                // Populate outlet dropdown
+                newUserOutlet.innerHTML = '';
+                database.outlets.forEach(outlet => {
+                    const option = document.createElement('option');
+                    option.value = outlet.id;
+                    
+                    // Clean the name for display
+                    let cleanName = outlet.name;
+                    if (typeof cleanName === 'string') {
+                        cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
+                    }
+                    
+                    option.textContent = cleanName;
+                    newUserOutlet.appendChild(option);
+                });
+                
                 newUserOutlet.value = database.outlets[0].id;
             } else {
                 showNotification('No outlets available. Please create an outlet first.', 'error');
@@ -3310,85 +3375,90 @@
                 }
             });
 
-            saveUserBtn.addEventListener('click', async () => {
-                if (currentUser.role !== 'admin') return;
-                
-                const name = newUserName.value.trim();
-                const username = newUserUsername.value.trim();
-                const password = newUserPassword.value;
-                const outletId = parseInt(newUserOutlet.value);
-                
-                console.log('Saving user with data:', { name, username, password, outletId }); // Debug
-                
-                if (!name || !username || !password || !outletId) {
-                    showNotification('Please fill all required fields', 'error');
-                    return;
-                }
-                
-                // Check if username already exists (exclude current editing user)
-                const existingUser = database.users.find(u => 
-                    u.username === username && u.id !== editingId
-                );
-                if (existingUser) {
-                    showNotification('Username already exists', 'error');
-                    return;
-                }
-                
-                try {
-                    if (editingId) {
-                        // Update existing user
-                        const userIndex = database.users.findIndex(u => u.id === editingId);
-                        if (userIndex !== -1) {
-                            // Update the user object with consistent field names
-                            database.users[userIndex] = {
-                                ...database.users[userIndex],
-                                name: name,
-                                username: username,
-                                password: password,
-                                outlet_id: outletId, // Use consistent field name
-                                outletId: outletId   // Keep both for compatibility
-                            };
-                            
-                            console.log('Updated user:', database.users[userIndex]); // Debug
-                            
-                            // Save to Supabase or local storage
-                            await saveUser(database.users[userIndex]);
-                            
-                            showNotification('User updated successfully', 'success');
-                        }
-                    } else {
-                        // Add new user - create with consistent field structure
-                        const newUser = {
-                            id: Math.max(0, ...database.users.map(u => u.id)) + 1, // Better ID generation
+        saveUserBtn.addEventListener('click', async () => {
+            if (currentUser.role !== 'admin') return;
+            
+            const name = newUserName.value.trim();
+            const username = newUserUsername.value.trim();
+            const password = newUserPassword.value;
+            const outletId = parseInt(newUserOutlet.value);
+            
+            console.log('Saving user with data:', { name, username, password, outletId }); // Debug
+            
+            if (!name || !username || !password || !outletId) {
+                showNotification('Please fill all required fields', 'error');
+                return;
+            }
+            
+            // Validate outlet exists
+            const outletExists = database.outlets.some(outlet => outlet.id === outletId);
+            if (!outletExists) {
+                showNotification('Selected outlet does not exist', 'error');
+                return;
+            }
+            
+            // Check if username already exists (exclude current editing user)
+            const existingUser = database.users.find(u => 
+                u.username.toLowerCase() === username.toLowerCase() && u.id !== editingId
+            );
+            if (existingUser) {
+                showNotification('Username already exists', 'error');
+                return;
+            }
+            
+            try {
+                if (editingId) {
+                    // Update existing user
+                    const userIndex = database.users.findIndex(u => u.id === editingId);
+                    if (userIndex !== -1) {
+                        // Update the user object
+                        const updatedUser = {
+                            ...database.users[userIndex],
                             name: name,
                             username: username,
                             password: password,
-                            outlet_id: outletId, // Primary field name
-                            outletId: outletId,  // Secondary for compatibility
-                            role: 'user'
+                            outlet_id: outletId,
+                            // Remove outletId field to avoid confusion
                         };
+                        delete updatedUser.outletId; // Remove old field
                         
-                        console.log('Creating new user:', newUser); // Debug
-                        
-                        database.users.push(newUser);
+                        database.users[userIndex] = updatedUser;
+                        console.log('Updated user:', database.users[userIndex]);
                         
                         // Save to Supabase or local storage
-                        await saveUser(newUser);
-                        
-                        showNotification('User created successfully', 'success');
+                        await saveUser(updatedUser);
+                        showNotification('User updated successfully', 'success');
                     }
+                } else {
+                    // Add new user
+                    const newUser = {
+                        id: Math.max(0, ...database.users.map(u => u.id || 0)) + 1,
+                        name: name,
+                        username: username,
+                        password: password,
+                        outlet_id: outletId,
+                        role: 'user'
+                    };
                     
-                    userForm.style.display = 'none';
-                    saveToLocalStorage();
+                    console.log('Creating new user:', newUser);
+                    database.users.push(newUser);
                     
-                    // Force reload users to ensure display is updated
-                    await loadUsers();
-                    
-                } catch (error) {
-                    console.error('Error saving user:', error);
-                    showNotification('Error saving user: ' + error.message, 'error');
+                    // Save to Supabase or local storage
+                    await saveUser(newUser);
+                    showNotification('User created successfully', 'success');
                 }
-            });
+                
+                userForm.style.display = 'none';
+                saveToLocalStorage();
+                
+                // Force reload users to ensure display is updated
+                await loadUsers();
+                
+            } catch (error) {
+                console.error('Error saving user:', error);
+                showNotification('Error saving user: ' + error.message, 'error');
+            }
+        });
             
             // Edit and delete handlers for items (admin only)
             itemsList.addEventListener('click', (e) => {
@@ -3461,9 +3531,29 @@
                     newUserUsername.value = user.username;
                     newUserPassword.value = user.password;
                     
-                    // Handle both field name formats for outlet ID
+                    // Ensure outlet dropdown is populated
+                    newUserOutlet.innerHTML = '';
+                    database.outlets.forEach(outlet => {
+                        const option = document.createElement('option');
+                        option.value = outlet.id;
+                        
+                        // Clean the name for display
+                        let cleanName = outlet.name;
+                        if (typeof cleanName === 'string') {
+                            cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
+                        }
+                        
+                        option.textContent = cleanName;
+                        newUserOutlet.appendChild(option);
+                    });
+                    
+                    // Set the outlet value - use outlet_id as primary source
                     const outletId = user.outlet_id || user.outletId;
-                    newUserOutlet.value = outletId || '';
+                    if (outletId) {
+                        newUserOutlet.value = outletId;
+                    } else if (database.outlets.length > 0) {
+                        newUserOutlet.value = database.outlets[0].id;
+                    }
                     
                     userForm.style.display = 'block';
                 }
@@ -3512,6 +3602,43 @@
                     showNotification('Item removed from cart', 'success');
                 }
             });
+        }
+
+        // Add this function to populate the outlet dropdown
+        function populateOutletDropdown(selectElement, selectedOutletId = null) {
+            selectElement.innerHTML = '';
+            
+            if (database.outlets.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No outlets available';
+                selectElement.appendChild(option);
+                selectElement.disabled = true;
+                return;
+            }
+            
+            database.outlets.forEach(outlet => {
+                const option = document.createElement('option');
+                option.value = outlet.id;
+                
+                // Clean the name for display
+                let cleanName = outlet.name;
+                if (typeof cleanName === 'string') {
+                    cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
+                }
+                
+                option.textContent = cleanName;
+                selectElement.appendChild(option);
+            });
+            
+            selectElement.disabled = false;
+            
+            // Set selected value if provided
+            if (selectedOutletId) {
+                selectElement.value = selectedOutletId;
+            } else if (database.outlets.length > 0) {
+                selectElement.value = database.outlets[0].id;
+            }
         }
 
         // Initialize the app
