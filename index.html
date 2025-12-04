@@ -1151,24 +1151,55 @@
 
         // Initialize the app
         async function init() {
+            console.log('=== Initializing app ===');
+            
             loadFromLocalStorage();
             setupEventListeners();
+            
+            // Clean up old deleted order records
             cleanupDeletedOrders();
             
-            // Preload outlets from Supabase on startup
+            // Preload data from Supabase on startup
             try {
-                const { data: outlets, error } = await supabase
+                console.log('Preloading data from Supabase...');
+                
+                // Preload outlets
+                const { data: outlets, error: outletsError } = await supabase
                     .from('outlets')
                     .select('*')
                     .order('name');
                     
-                if (!error && outlets) {
+                if (!outletsError && outlets) {
                     database.outlets = outlets;
-                    saveToLocalStorage();
                     console.log('Preloaded outlets from Supabase:', outlets.length);
                 }
+                
+                // Preload users
+                const { data: users, error: usersError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .order('name');
+                    
+                if (!usersError && users) {
+                    database.users = users;
+                    console.log('Preloaded users from Supabase:', users.length);
+                }
+                
+                // Preload items (for admin)
+                const { data: items, error: itemsError } = await supabase
+                    .from('items')
+                    .select('*')
+                    .order('name');
+                    
+                if (!itemsError && items) {
+                    database.items = items;
+                    console.log('Preloaded items from Supabase:', items.length);
+                }
+                
+                saveToLocalStorage();
+                
             } catch (error) {
-                console.error('Error preloading outlets:', error);
+                console.error('Error preloading data:', error);
             }
         }
 
@@ -1191,7 +1222,8 @@
                     
                     if (user) {
                         currentUser = user;
-                        // Ensure outlets are loaded for the user
+                        // Load fresh data from Supabase for other users
+                        await loadUsersFromSupabase();
                         await loadOutletsForUser();
                         showApp();
                         showNotification(`Welcome, ${user.name}!`, 'success');
@@ -1202,25 +1234,22 @@
                     }
                 }
                 
-                // In the login function, after successful login:
                 if (data) {
                     currentUser = data;
                     
-                    // Ensure the user has a valid outlet_id
-                    if (currentUser.role === 'user' && (!currentUser.outlet_id || currentUser.outlet_id === null)) {
-                        // Assign default outlet if none exists
-                        if (database.outlets.length > 0) {
-                            currentUser.outlet_id = database.outlets[0].id;
-                            console.log('Assigned default outlet to user:', currentUser.outlet_id);
-                        } else {
-                            showNotification('Warning: No outlets found. User cannot create orders.', 'warning');
-                        }
-                    }
+                    // Load fresh data from Supabase for all tables
+                    await loadUsersFromSupabase(); // Load all users
+                    await loadOutletsForUser();
+                    await loadItems(); // For admin
+                    await loadOutlets(); // For admin
                     
                     showApp();
                     showNotification(`Welcome, ${data.name}!`, 'success');
                     return true;
                 }
+                
+                showNotification('Invalid username or password', 'error');
+                return false;
                 
             } catch (error) {
                 console.error('Login error:', error);
@@ -1229,7 +1258,6 @@
                 
                 if (user) {
                     currentUser = user;
-                    // Ensure outlets are loaded for the user
                     await loadOutletsForUser();
                     showApp();
                     showNotification(`Welcome, ${user.name}!`, 'success');
@@ -1238,6 +1266,38 @@
                     showNotification('Invalid username or password', 'error');
                     return false;
                 }
+            }
+        }
+
+        // Function to load users from Supabase and update local storage
+        async function loadUsersFromSupabase() {
+            console.log('Loading users from Supabase...');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .order('name');
+                
+                if (error) {
+                    console.error('Error loading users from Supabase:', error);
+                    return false;
+                }
+                
+                if (data && data.length > 0) {
+                    // Update local database
+                    database.users = data;
+                    saveToLocalStorage();
+                    console.log('Updated local users from Supabase:', data.length);
+                    return true;
+                } else {
+                    console.log('No users found in Supabase');
+                    return false;
+                }
+                
+            } catch (error) {
+                console.error('Error in loadUsersFromSupabase:', error);
+                return false;
             }
         }
 
@@ -1720,12 +1780,14 @@
         }
 
         async function loadUsers() {
+            console.log('=== loadUsers() called ===');
+            
             if (currentUser.role !== 'admin') return;
             
             try {
                 let users = [];
                 
-                // Try Supabase first
+                // ALWAYS try Supabase first for fresh data
                 const { data, error } = await supabase
                     .from('users')
                     .select('*')
@@ -1737,9 +1799,11 @@
                     users = [...database.users];
                 } else {
                     users = data || [];
-                    // Update local database with data from Supabase
+                    console.log('Loaded users from Supabase:', users.length);
+                    
+                    // CRITICAL: Update local database with Supabase data
                     database.users = users;
-                    saveToLocalStorage();
+                    saveToLocalStorage(); // Save to localStorage so it persists
                 }
                 
                 displayUsers(users);
@@ -2085,13 +2149,15 @@
             if (currentUser.role !== 'admin') return;
             
             try {
+                console.log('Saving user to Supabase:', user);
+                
                 // Ensure consistent field names
                 const userToSave = {
                     id: user.id,
                     name: user.name,
                     username: user.username,
                     password: user.password,
-                    outlet_id: user.outlet_id || user.outletId, // Prioritize outlet_id
+                    outlet_id: user.outlet_id || user.outletId,
                     role: user.role || 'user'
                 };
                 
@@ -2126,6 +2192,9 @@
                     }
                     saveToLocalStorage();
                 }
+                
+                // Force reload users from Supabase to ensure consistency
+                await loadUsers();
                 
                 return true;
                 
@@ -2731,9 +2800,23 @@
             userName.textContent = `User: ${currentUser.name}`;
             userRole.textContent = currentUser.role === 'admin' ? 'Admin' : 'User';
             
-            // Preload outlets for both admin and regular users
-            console.log('Preloading outlets for user...');
-            await ensureOutletsLoaded();
+            // For regular users, show their outlet
+            if (currentUser.role !== 'admin' && currentUser.outlet_id) {
+                const outlet = database.outlets.find(o => o.id === currentUser.outlet_id);
+                if (outlet) {
+                    // Clean the outlet name for display
+                    let cleanName = outlet.name;
+                    if (typeof cleanName === 'string') {
+                        cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
+                    }
+                    currentOutlet.textContent = cleanName;
+                } else {
+                    currentOutlet.textContent = 'Outlet Not Found';
+                    console.error('User outlet not found:', currentUser.outlet_id);
+                }
+            } else if (currentUser.role === 'admin') {
+                currentOutlet.textContent = 'All Outlets (Admin)';
+            }
             
             // Show/hide tabs based on user role
             if (currentUser.role === 'admin') {
@@ -2744,24 +2827,6 @@
                 document.querySelectorAll('.admin-only').forEach(btn => {
                     btn.style.display = 'inline-flex';
                 });
-                
-                // For regular users, ensure they have an outlet and show it
-                if (currentUser.outlet_id) {
-                    const outlet = database.outlets.find(o => o.id === currentUser.outlet_id);
-                    if (outlet) {
-                        // Clean the outlet name for display
-                        let cleanName = outlet.name;
-                        if (typeof cleanName === 'string') {
-                            cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
-                        }
-                        currentOutlet.textContent = cleanName;
-                    } else {
-                        currentOutlet.textContent = 'Outlet Not Found';
-                        console.error('User outlet not found:', currentUser.outlet_id);
-                    }
-                } else {
-                    currentOutlet.textContent = 'No Outlet Assigned';
-                }
             } else {
                 adminTab1.style.display = 'none';
                 adminTab2.style.display = 'none';
@@ -2770,25 +2835,6 @@
                 document.querySelectorAll('.admin-only').forEach(btn => {
                     btn.style.display = 'none';
                 });
-                
-                // For regular users, ensure they have an outlet and show it
-                if (currentUser.outlet_id) {
-                    const outlet = database.outlets.find(o => o.id === currentUser.outlet_id);
-                    if (outlet) {
-                        // Clean the outlet name for display
-                        let cleanName = outlet.name;
-                        if (typeof cleanName === 'string') {
-                            cleanName = cleanName.replace(/^['"](.*)['"]$/, '$1').trim();
-                        }
-                        currentOutlet.textContent = cleanName;
-                    } else {
-                        currentOutlet.textContent = 'Outlet Not Found';
-                        console.error('User outlet not found:', currentUser.outlet_id);
-                        console.log('Available outlets:', database.outlets);
-                    }
-                } else {
-                    currentOutlet.textContent = 'No Outlet Assigned';
-                }
             }
             
             // Fix any users with null outlets
@@ -2797,9 +2843,10 @@
             // Load initial data
             loadOrders();
             if (currentUser.role === 'admin') {
-                loadItems();
-                loadOutlets();
-                loadUsers();
+                // Force reload from Supabase
+                await loadUsers(); // This will now load from Supabase
+                await loadItems();
+                await loadOutlets();
             }
             updateCart();
         }
