@@ -715,8 +715,8 @@
             <i class="fas fa-sign-in-alt"></i> Login
         </button>
         <div style="margin-top: 20px; font-size: 0.9rem; color: var(--gray); text-align: center;">
-            <p>Default admin credentials: admin / admin123</p>
-            <p>User credentials: user1 / user123 (Outlet A)</p>
+            <p>Username and Password are case sensitive</p>
+            <p>_________</p>
         </div>
     </div>
 
@@ -1329,7 +1329,7 @@
             
             try {
                 // Always load outlets from Supabase to ensure fresh data
-                await refreshOutlets();
+                await loadOutlets(); 
                 
                 // For regular users, verify they have a valid outlet
                 if (currentUser.role !== 'admin') {
